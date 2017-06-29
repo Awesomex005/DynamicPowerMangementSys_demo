@@ -1,0 +1,11 @@
+{
+  "uuid": "ab001",
+  "name": "ab001",
+  "minimal_power": "150",
+  "priority_group": "0",
+  "physical_info": {},
+  "task_info": {},
+  "ip": "localhost",
+  "rpc_port": "5001",
+  "bmc_ip": "10.2.2.101"
+}

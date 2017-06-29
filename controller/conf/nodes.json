@@ -1,0 +1,35 @@
+{
+  "ab001": {
+    "uuid": "ab001",
+    "name": "ab001",
+    "minimal_power": "150",
+    "priority_group": "0",
+    "physical_info": {},
+    "task_info": {},
+    "ip": "localhost",
+    "rpc_port": "5001",
+    "bmc_ip": "10.2.2.101"
+  },
+  "ab002": {
+    "uuid": "ab002",
+    "name": "ab002",
+    "minimal_power": "150",
+    "priority_group": "1",
+    "physical_info": {},
+    "task_info": {},
+    "ip": "localhost",
+    "rpc_port": "5002",
+    "bmc_ip": "10.2.2.102"
+  },
+  "ab003": {
+    "uuid": "ab003",
+    "name": "ab003",
+    "minimal_power": "150",
+    "priority_group": "1",
+    "physical_info": {},
+    "task_info": {},
+    "ip": "localhost",
+    "rpc_port": "5003",
+    "bmc_ip": "10.2.2.103"
+  }
+}
