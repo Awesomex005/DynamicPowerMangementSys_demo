@@ -4,6 +4,7 @@ from multiprocessing import Process, Queue, Manager, current_process, freeze_sup
 import threading
 import time
 import xmlrpc.client
+import http.client
 
 import processespool
 
@@ -11,6 +12,13 @@ SUCCESS = True
 FAILED = False
 NUM_OF_READ_PROCESSES = 100
 NUM_OF_SET_PROCESSES = NUM_OF_READ_PROCESSES / 2 if NUM_OF_READ_PROCESSES / 2 < 1 else 1
+
+class TimeoutTransport(xmlrpc.client.Transport):
+    def set_timeout(self, timeout):
+        self.timeout = timeout
+    def make_connection(self, host):
+        hconn = http.client.HTTPConnection(host, timeout=self.timeout)
+        return hconn
 
 
 class LeafNode(object):
@@ -91,7 +99,9 @@ class LeafController(object):
     def read_node_power(uuid, rpc_ip, rpc_port):
         status = SUCCESS
         power = 0
-        leafnode_rcp_if = xmlrpc.client.ServerProxy("http://%s:%s" % (rpc_ip, rpc_port))
+        timeout_transport = TimeoutTransport()
+        timeout_transport.set_timeout(1.0)
+        leafnode_rcp_if = xmlrpc.client.ServerProxy("http://%s:%s" % (rpc_ip, rpc_port), transport=timeout_transport)
         try:
             read_status, power = leafnode_rcp_if.read_power()
         except Exception as expt:
