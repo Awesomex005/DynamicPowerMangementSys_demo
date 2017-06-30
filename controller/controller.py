@@ -34,6 +34,20 @@ class LeafNode(object):
         self.rpc_port = rpc_port
         self.bmc_ip = bmc_ip
         self.cur_power = 0
+        self.peak_power = self.minimal_power
+        self.connectivity_error = False
+        self.connectivity_error_cnt = 0
+        self.power_limit = 0
+
+    def clr_connectivity_error(self):
+        self.connectivity_error = False
+        self.connectivity_error_cnt = 0
+
+    def inc_connectivity_error_cnt(self):
+        self.connectivity_error_cnt += 1
+        if self.connectivity_error_cnt > 2:
+            self.connectivity_error_cnt = 3
+            self.connectivity_error = True
 
 
 def proxy_read_node_power(uuid, rpc_ip, rpc_port):
@@ -50,6 +64,8 @@ class LeafController(object):
         self.name = name
         self.minimal_power = minimal_power
         self.physical_power_limit = physical_power_limit
+        self.cur_power = 0
+        self.contractual_power_limit = 0
         self.ip = ip
         self.rpc_port = rpc_port
         self.leaf_node_list = {}
@@ -81,7 +97,7 @@ class LeafController(object):
             cfg_data = json.load(cfg_file)
         for key in cfg_data.keys():
             node_info = cfg_data[key]
-            leafnode = LeafNode(node_info["uuid"], node_info["name"], node_info["minimal_power"],
+            leafnode = LeafNode(node_info["uuid"], node_info["name"], int(node_info["minimal_power"]),
                                 int(node_info["priority_group"]), node_info["physical_info"], node_info["task_info"],
                                 node_info["ip"], node_info["rpc_port"], node_info["bmc_ip"])
             self.add_node(leafnode.uuid, leafnode)
@@ -124,21 +140,41 @@ class LeafController(object):
         print("pulling nodes power ==>")
         with self.node_list_lock:
             for uuid in self.leaf_node_list.keys():
-                ip = self.leaf_node_list[uuid].ip
-                rpc_port = self.leaf_node_list[uuid].rpc_port
+                ip = self.leaf_node_list[uuid].ip; rpc_port = self.leaf_node_list[uuid].rpc_port
                 task = (proxy_read_node_power, (uuid, ip, rpc_port))
                 self.proc_pool.put_read_node_work(task)
         # time.sleep(1)
         with self.node_list_lock:
             for i in range(len(self.leaf_node_list)):
                 status, read_status, uuid, power = self.proc_pool.get_read_node_work()
-                # TODO failure handle
+                node = self.leaf_node_list[uuid]
                 if status is SUCCESS and read_status is SUCCESS:
-                    self.leaf_node_list[uuid].cur_power = power
+                    node.cur_power = power
+                    node.peak_power = power if power > node.peak_power else node.peak_power
+                    node.clr_connectivity_error()
                     print("read %s --> %d" % (uuid, power))
-                    pass
                 else:
+                    node.inc_connectivity_error_cnt()
                     print("read %s --> %s" % (uuid, read_status))
+
+    def estimate_nodes_power(self):
+        # for those node who is suffering a network error, and whose BMC is unaccessible either.
+        with self.node_list_lock:
+            for uuid in self.leaf_node_list.keys():
+                node = self.leaf_node_list[uuid]
+                if node.connectivity_error:
+                    # TODO estimate node power according to peer nodes.
+                    pass
+                    # failed to estimate node power according to peer nodes
+                    self.leaf_node_list[uuid].cur_power = self.leaf_node_list[uuid].peak_power
+
+    def aggregate_nodes_power(self):
+        power_aggregation = 0
+        with self.node_list_lock:
+            for uuid in self.leaf_node_list.keys():
+                power_aggregation += self.leaf_node_list[uuid].cur_power
+        print("Power Aggregation : %6dw" % power_aggregation)
+        return power_aggregation
 
 
 if __name__ == "__main__":
@@ -149,5 +185,7 @@ if __name__ == "__main__":
 
     while True:
         leaf_controller.pull_nodes_power()
+        leaf_controller.estimate_nodes_power()
         leaf_controller.show_nodes()
+        leaf_controller.aggregate_nodes_power()
         time.sleep(3)
