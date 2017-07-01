@@ -18,8 +18,8 @@ class ControllerProcessesPool(object):
 
     def do_work(self, func, args):
         result = func(*args)
-        print ('ProcPool: %s says that %s%s = %s' %
-               (current_process().name, func.__name__, args, result))
+        # print ('ProcPool: %s says that %s%s = %s' %
+        #       (current_process().name, func.__name__, args, result))
         return result
 
     def put_read_node_work(self, task):

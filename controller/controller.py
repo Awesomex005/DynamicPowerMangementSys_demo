@@ -62,8 +62,8 @@ def proxy_set_node_powerlimit(uuid, rpc_ip, rpc_port, power_limit):
 
 
 class LeafController(object):
-    def __init__(self, uuid, name, minimal_power, physical_power_limit, proc_pool, strategy_class=StdStrategy,
-                 ip='0.0.0.0', rpc_port='5001'):
+    def __init__(self, uuid, name, minimal_power, physical_power_limit, proc_pool, ip='0.0.0.0', rpc_port='5001',
+                 strategy_class=StdStrategy):
         self.uuid = uuid
         self.name = name
         self.minimal_power = minimal_power
@@ -97,17 +97,11 @@ class LeafController(object):
             self.leaf_node_list_3.setdefault(uuid, leafnode)
             return
 
-    # compose leaf nodes from json configure file.
     def compose_nodes(self):
-        with open("conf/nodes.json") as cfg_file:
-            cfg_data = json.load(cfg_file)
-        for key in cfg_data.keys():
-            node_info = cfg_data[key]
-            leafnode = LeafNode(node_info["uuid"], node_info["name"], int(node_info["minimal_power"]),
-                                int(node_info["priority_group"]), node_info["physical_info"], node_info["task_info"],
-                                node_info["ip"], node_info["rpc_port"], node_info["bmc_ip"])
-            self.add_node(leafnode.uuid, leafnode)
-        return
+        self.strategy.compose_nodes(self, LeafNode)
+
+    def rt_add_node(self, node_info):
+        self.strategy.rt_add_node(self, node_info)
 
     def show_nodes(self):
         with self.node_list_lock:
@@ -134,7 +128,9 @@ class LeafController(object):
     @staticmethod
     def set_node_powerlimit(uuid, rpc_ip, rpc_port, power_limit):
         status = SUCCESS
-        leafnode_rcp_if = xmlrpc.client.ServerProxy("http://%s:%s" % (rpc_ip, rpc_port))
+        timeout_transport = TimeoutTransport()
+        timeout_transport.set_timeout(1.0)
+        leafnode_rcp_if = xmlrpc.client.ServerProxy("http://%s:%s" % (rpc_ip, rpc_port), transport=timeout_transport)
         try:
             set_status = leafnode_rcp_if.set_power_limit(power_limit)
         except Exception as expt:
@@ -146,7 +142,7 @@ class LeafController(object):
         print("pulling nodes power ==>")
         with self.node_list_lock:
             for uuid in self.leaf_node_list.keys():
-                ip = self.leaf_node_list[uuid].ip;
+                ip = self.leaf_node_list[uuid].ip
                 rpc_port = self.leaf_node_list[uuid].rpc_port
                 task = (proxy_read_node_power, (uuid, ip, rpc_port))
                 self.proc_pool.put_read_node_work(task)
@@ -163,6 +159,27 @@ class LeafController(object):
                 else:
                     node.inc_connectivity_error_cnt()
                     print("read %s --> %s" % (uuid, read_status))
+
+    def deliver_power_limit(self):
+        print("setting nodes power limit ==>")
+        with self.node_list_lock:
+            for uuid in self.leaf_node_list.keys():
+                ip = self.leaf_node_list[uuid].ip
+                rpc_port = self.leaf_node_list[uuid].rpc_port
+                power_limit = self.leaf_node_list[uuid].power_limit
+                task = (proxy_set_node_powerlimit, (uuid, ip, rpc_port, power_limit))
+                self.proc_pool.put_set_node_work(task)
+
+        with self.node_list_lock:
+            for i in range(len(self.leaf_node_list)):
+                status, set_status, uuid = self.proc_pool.get_set_node_work()
+                node = self.leaf_node_list[uuid]
+                if status is SUCCESS and set_status is SUCCESS:
+                    print("set powerlimit to %s --> %s" % (uuid, 'done'))
+                    pass
+                else:
+                    node.inc_connectivity_error_cnt()
+                    print("set powerlimit to %s --> %s" % (uuid, set_status))
 
     def estimate_nodes_power(self):
         # for those node who is suffering a network error, and whose BMC is unaccessible either.
@@ -184,7 +201,9 @@ class LeafController(object):
             self.show_nodes()
             self.aggregate_nodes_power()
             self.update_cur_power()
+            self.deliver_power_limit()
             time.sleep(3)
+            continue
             # below code for test only
             i += 1
             if i % 2:
@@ -195,7 +214,8 @@ class LeafController(object):
 
 if __name__ == "__main__":
     proc_pool = processespool.ProcPool(NUM_OF_READ_PROCESSES, NUM_OF_SET_PROCESSES)
-    leaf_controller = LeafController("leafc0", "leafc0", 1000, 9000, proc_pool, StdStrategy, "10.1.1.2")
+    leaf_controller = LeafController("leafc0", "leafc0", 1000, 9000, proc_pool, ip="10.1.1.2",
+                                     strategy_class=StdStrategy)
     leaf_controller.compose_nodes()
     leaf_controller.show_nodes()
     leaf_controller.run()

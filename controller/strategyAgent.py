@@ -13,6 +13,27 @@ FAILED = False
 
 
 class StdStrategy(object):
+    def compose_nodes(self, lc_obj, leafnode_cls):
+        # compose leaf nodes from json configure file.
+        with open("conf/nodes.json") as cfg_file:
+            cfg_data = json.load(cfg_file)
+        for key in cfg_data.keys():
+            node_info = cfg_data[key]
+            leafnode = leafnode_cls(node_info["uuid"], node_info["name"], int(node_info["minimal_power"]),
+                                    int(node_info["priority_group"]), node_info["physical_info"],
+                                    node_info["task_info"],
+                                    node_info["ip"], node_info["rpc_port"], node_info["bmc_ip"])
+            lc_obj.add_node(leafnode.uuid, leafnode)
+        return
+
+    def rt_add_node(self, lc_obj, node_info):
+        # adding node during run time.
+        # this function should be invoked before the new server node being physically inserted to the power delivery hierarchy.
+        leafnode = leafnode_cls(node_info["uuid"], node_info["name"], int(node_info["minimal_power"]),
+                                int(node_info["priority_group"]), node_info["physical_info"], node_info["task_info"],
+                                node_info["ip"], node_info["rpc_port"], node_info["bmc_ip"])
+        lc_obj.add_node(leafnode.uuid, leafnode)
+
     def estimate_nodes_power(self, lc_obj):
         with lc_obj.node_list_lock:
             for uuid in lc_obj.leaf_node_list.keys():
