@@ -13,6 +13,11 @@ FAILED = False
 
 
 class StdStrategy(object):
+    def init_param(self, tgt=0.95, upper_threshold=0.99, lower_threshold=0.90):
+        self.tgt = tgt
+        self.upper_threshold = upper_threshold
+        self.lower_threshold = lower_threshold
+
     def compose_nodes(self, lc_obj, leafnode_cls):
         # compose leaf nodes from json configure file.
         with open("conf/nodes.json") as cfg_file:
@@ -56,6 +61,29 @@ class StdStrategy(object):
     def update_cur_power(self, lc_obj):
         lc_obj.cur_power = lc_obj.nodes_power_sum
         print("Leaf Controller Current Power : %6dw" % lc_obj.cur_power)
+
+    def uncap_leafnodes(self, lc_obj):
+        with lc_obj.node_list_lock:
+            for uuid in lc_obj.leaf_node_list.keys():
+                leafnode = lc_obj.leaf_node_list[uuid]
+                leafnode.power_limit = 0
+
+    def power_limit_decision(self, lc_obj):
+        print("make power capping decision ==>")
+        with lc_obj.ctrl_lock:
+            if lc_obj.contractual_power_limit:
+                power_limit = lc_obj.contractual_power_limit
+            else:
+                power_limit = lc_obj.physical_power_limit
+
+            if lc_obj.cur_power >= power_limit * self.upper_threshold:
+                print("[cap]")
+                total_power_cut = lc_obj.cur_power - power_limit * self.tgt
+                
+                pass
+            elif lc_obj.cur_power <= power_limit * self.lower_threshold:
+                print("[uncap]")
+                self.uncap_leafnodes(lc_obj)
 
 
 class SpecialStrategy(StdStrategy):

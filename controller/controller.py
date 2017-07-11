@@ -74,13 +74,15 @@ class LeafController(object):
         self.ip = ip
         self.rpc_port = rpc_port
         self.leaf_node_list = {}
-        self.leaf_node_list_0 = {}
+        self.leaf_node_list_0 = {} # have highest priority
         self.leaf_node_list_1 = {}
         self.leaf_node_list_2 = {}
         self.leaf_node_list_3 = {}
         self.proc_pool = proc_pool
         self.node_list_lock = threading.Lock()
+        self.ctrl_lock = threading.Lock()
         self.strategy = strategy_class()
+        self.strategy.init_param()
 
     def add_node(self, uuid, leafnode):
         self.leaf_node_list.setdefault(uuid, leafnode)
@@ -191,6 +193,9 @@ class LeafController(object):
     def update_cur_power(self):
         self.strategy.update_cur_power(self)
 
+    def power_limit_decision(self):
+        self.strategy.power_limit_decision(self)
+
     def run(self):
         i = 1
         std_strategy = StdStrategy()
@@ -201,6 +206,7 @@ class LeafController(object):
             self.show_nodes()
             self.aggregate_nodes_power()
             self.update_cur_power()
+            self.power_limit_decision()
             self.deliver_power_limit()
             time.sleep(3)
             continue
