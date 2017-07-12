@@ -46,7 +46,7 @@ class StdStrategy(object):
                 if node.connectivity_error:
                     # TODO estimate node power according to peer nodes.
                     pass
-                    # failed to estimate node power according to peer nodes
+                    # failed to estimate node power according to peer nodes, use its peak_power
                     lc_obj.leaf_node_list[uuid].cur_power = lc_obj.leaf_node_list[uuid].peak_power
 
     def aggregate_nodes_power(self, lc_obj):
@@ -79,8 +79,28 @@ class StdStrategy(object):
             if lc_obj.cur_power >= power_limit * self.upper_threshold:
                 print("[cap]")
                 total_power_cut = lc_obj.cur_power - power_limit * self.tgt
-                
-                pass
+                with lc_obj.node_list_lock:
+                    lfnode_3_ascending = sorted(lc_obj.leaf_node_list_3.items(), key=lambda lfnode: lfnode[1].cur_power,
+                                                reverse=True)
+                    lfnode_2_ascending = sorted(lc_obj.leaf_node_list_2.items(), key=lambda lfnode: lfnode[1].cur_power,
+                                                reverse=True)
+                    lfnode_1_ascending = sorted(lc_obj.leaf_node_list_1.items(), key=lambda lfnode: lfnode[1].cur_power,
+                                                reverse=True)
+                    lfnode_0_ascending = sorted(lc_obj.leaf_node_list_0.items(), key=lambda lfnode: lfnode[1].cur_power,
+                                                reverse=True)
+                    lfnode_in_order =[]
+                    lfnode_in_order.append(lfnode_3_ascending); lfnode_in_order.append(lfnode_2_ascending)
+                    lfnode_in_order.append(lfnode_1_ascending); lfnode_in_order.append(lfnode_0_ascending)
+                    for lfnode_group in lfnode_in_order:
+                        for item in lfnode_group:
+                            lfnode = item[1]
+                            power_cut = min(lfnode.cur_power - lfnode.minimal_power, total_power_cut)
+                            lfnode.power_limit = lfnode.cur_power - power_cut
+                            total_power_cut -= power_cut
+                            if not total_power_cut:
+                                break
+                        if not total_power_cut:
+                            break
             elif lc_obj.cur_power <= power_limit * self.lower_threshold:
                 print("[uncap]")
                 self.uncap_leafnodes(lc_obj)
